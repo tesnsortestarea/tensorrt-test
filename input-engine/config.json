@@ -1,0 +1,25 @@
+{
+    "architecture": "BloomForCausalLM",
+    "dtype": "float16",
+    "logits_dtype": "float32",
+    "num_hidden_layers": 24,
+    "num_attention_heads": 16,
+    "hidden_size": 1024,
+    "norm_epsilon": 1e-05,
+    "vocab_size": 250880,
+    "position_embedding_type": "alibi",
+    "hidden_act": "gelu",
+    "intermediate_size": 4096,
+    "quantization": {
+        "quant_algo": null,
+        "kv_cache_quant_algo": null
+    },
+    "mapping": {
+        "world_size": 1,
+        "tp_size": 1,
+        "pp_size": 1
+    },
+    "use_parallel_embedding": false,
+    "embedding_sharding_dim": 0,
+    "share_embedding_table": false
+}

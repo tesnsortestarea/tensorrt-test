@@ -1,0 +1,138 @@
+
+
+Prepare tensor-triton server for language base inference
+
+For this project i will uese gpt model fron newes version of tensorrt-llm because it include all necessary configuration which is needed to build model engines and getting run the server for receiving the request including all the pipeline for quantization. In this tutorial we will not go deep into detail of each component. I will explain the steps need to get a model run on a triton-inference-server with all necessary configuration is needed.
+
+1- Download gpt2 model from:
+Hugging Face models are often pre-trained neural networks that have learned patterns from massive datasets. By using these pre-trained models, developers and researchers can leverage advanced AI capabilities without having to train complex models from scratch, which saves significant time, computational resources, and expertise.
+
+https://huggingface.co/openai-community/gpt2-medium
+
+
+2- download tensorrt-llm and follow the the steps for building docker.
+
+
+TensorRT-LLM builds upon NVIDIA's existing TensorRT deep learning optimizer, but it's tailored specifically for the unique characteristics of LLMs. It provides a Python API that allows users to define LLMs and then compile them into highly optimized "TensorRT engines." These engines contain state-of-the-art optimizations, including:
+Custom CUDA Kernels, Quantization, Layer Fusion, In-Flight Batching, Paged Attention,  Speculative Decoding, Multi-GPU and Multi-Node Support.
+
+you can skip build the container in this step which will be included in the step 3.
+
+source code and guide:
+	https://github.com/NVIDIA/TensorRT-LLM
+
+building docker:
+	https://nvidia.github.io/TensorRT-LLM/installation/build-from-source-linux.html
+
+
+3- download tensorrtllm-backend and build a container
+The tensorrtllm_backend is the specialized plugin for NVIDIA Triton Inference Server that allows it to effectively and efficiently serve LLMs that have been optimized using NVIDIA TensorRT-LLM. It's a critical component for deploying high-performance, scalable LLM inference solutions on NVIDIA GPUs.
+The tensorrtllm-back will contain tensorrt-llm as the part of build then you can skip the step 2 and just selet a right tag ans branch for tensorrt-llm inside the repository.
+
+caution: It is very important the version of tirton-inference-server and tensorrtllm-backend version match together
+
+source and introduction how to build container:
+https://github.com/triton-inference-server/tensorrtllm_backend
+
+4- Downlaod inference-server and build container
+NVIDIA Triton Inference Server is an open-source inference serving software developed by NVIDIA. Its main purpose is to streamline the deployment and execution of AI models in production environments, making it easier to serve machine learning and deep learning models at scale.
+
+source and introduction how to build container:
+https://github.com/triton-inference-server/server
+
+
+5- Convert weights from HF Transformers to TensorRT-LLM format
+using script convert_checkpoint.py in https://github.com/NVIDIA/TensorRT-LLM/blob/main/examples/models/core/gpt/README.md to convert HF Transformers for gpt-model to Tnesorrt-llm format. for the value model_dir gpt2 use this path /prepare-triton-server/input-engine.
+
+
+6- Build TensorRT engines
+we use the output from step 5 to generate engine for gpt via comman trtllm-build from tensorrt-llm repository. We can use the command with different configuration like dtype or tp for tensor paralleslim and tp for pipeline parallelism for different hardware architecture to bild engine which be use later for quantization of model. For the command we should give a output folder like prepare-triton-server/output-engine to be used later in the docker to prepare model for inference. The description of the command for the gpt-model is listed here https://github.com/NVIDIA/TensorRT-LLM/blob/main/examples/models/core/gpt/README.md
+
+7- Prepare model for inference
+we need to copy the output from step 6 the folder prepare-triton-server/output-engine  to the folder /all_models/inflight_batcher_llm/tensorrt_llm/1/ in container to be find by triton-server.
+
+
+8- Prepare configure files for differene inference step
+In this step we will prepare pbtxt configure file which will be used in different stage like preprocessig, ensemble, tensorrt_llm and postprocessing of inference. Every LLM-Model should have its own configure files according the number of inputs and output of each stage with different data types. By default all the models dont have the configure file in Tensorrt-llm repository but for gpt model the configuration file exist in https://github.com/NVIDIA/TensorRT-LLM/tree/main/triton_backend/all_models/gpt.
+It is necessary to change some prarameter inside the pbtxt file for each stage with correct value. for that we can use fill_template.py or manualy. Normally the values should be adapted are in this format "${}" and should be replace with a valid value. The locaton of the configuration file is in /all_models/inflight_batcher_llm/tensorrt_llm in container.
+
+For mode information regarding triton-inference you can look into https://github.com/triton-inference-server/tutorials and https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/tensorrtllm_backend/README.html#launch-triton-tensorrt-llm-container
+
+9- Run the triton-server 
+After preparing the model and configuration now we can run the triton-server to accept input and provie output.
+python3 /opt/scripts/launch_triton_server.py --model_repo <path/to/model> 
+
+
+After generating the engines and configure the files the structure should be like this.
+
+/all_models/inflight_batcher_llm/tensorrt_llm/
+├── ensemble
+│   └── 1/
+│       └── config.pbtxt  
+├── preprocessor/
+│   └── 1/
+│       ├── config.pbtxt
+│       └── model.py
+│       └── requirements.txt
+├── tensorrt_llm/
+│   └── 1/
+│       ├── config.pbtxt
+│       
+└── postprocessor/
+    └── 1/
+        ├── config.pbtxt
+        └── model.py
+        └── requirements.txt
+└── 1/|                          # Path to engine from step 6
+      ├── rank0.engine
+      └── config.json
+
+
+
+Prepare triton-server for a vlm inference
+As we saw in the previos chapter we learn how to triton-server to handle language base input and providing output. Our goal is now to use the sampe principle to handle both vision and text input to provide proper output for the request. we are going to use large multimodal model (LMM) that is designed to understand and generate content based on both visual inputs (images) and textual instructions. For this we are going to use ClIP model (https://huggingface.co/docs/transformers/en/model_doc/clip) for the vision part and minilm-tex(https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) for the text part. We need to generate engine for these two models to be used in tensorrt.
+
+1- prepare CLIP vision engine and Text engine 
+After downloading both models dependend on the framework we can generate ONNX to represent neuronal network in standadized way. you can use these to scripts prepare-triton-server/engines/vision_encoder/vision_encoder.py and prepare-triton-server/engines/text_encoder/text_encoder.py to generate ONNX files. Then we can use trtexec (https://docs.nvidia.com/deeplearning/tensorrt/latest/reference/command-line-programs.html) generate engine for tensorRT using different parameter for quantization.
+We need to write two config.pbtxt for both text and vision engine to be used later by tensortrt-triton-server.
+
+/prepare-triton-server/engines/
+├── vision_encoder/tensorrt_quantized_models/engines\
+│   ├── config.pbtxt
+│   └── 1/
+│       └── clip_vision_encoder_quantized_int8.engine
+├── text_encoder/tensorrt_quantized_models/engines\
+│   ├── config.pbtxt
+│   └── 1/
+│       └── llava_llm_quantized_engine/ 
+└── llava_ensemble/
+    └── config.pbtxt
+
+2- Ensemble vision and text engine into vlm model
+After having two engines and right configuration pbtxt files for both models we can build the chain to handle both text and vision as input to provide text output to be forward to data base for looking best match.
+
+/prepare-triton-server/engines/├
+└── llava_ensemble/
+    └── config.pbtxt
+
+3- Mocking Mongo-DB and Vector-DB 
+After VLM inference result we try to look in DB for the best match to send answer to client.
+
+/prepare-triton-server/database/
+└── ├── mock-mongo.py
+    └── mock-vector.py
+
+
+
+
+
+
+
+
+
+
+https://github.com/NVIDIA/TensorRT-LLM/tree/main/examples/models/core/gpt
+
+https://github.com/NVIDIA/TensorRT-LLM/tree/main/tensorrt_llm/models/gpt
+
+https://github.com/NVIDIA/TensorRT-LLM/tree/main/triton_backend/all_models/gpt

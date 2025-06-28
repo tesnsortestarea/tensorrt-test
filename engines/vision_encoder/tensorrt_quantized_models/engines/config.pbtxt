@@ -1,0 +1,27 @@
+name: "vision_encoder_model"
+platform: "tensorrt_plan"
+max_batch_size: 16
+instance_group [
+  {
+    count: 1
+    kind: KIND_GPU
+  }
+]
+input [
+  {
+    name: "pixel_values"
+    data_type: TYPE_FP32 # Or TYPE_FP16 if you built with FP16 inputs
+    dims: [ 3, 224, 224 ]
+  }
+]
+output [
+  {
+    name: "last_hidden_state"
+    data_type: TYPE_FP32 # Or TYPE_FP16, match output of your encoder
+    dims: [ 257, 1024 ] # Example: [num_patches+CLS_token, hidden_dim]
+  }
+]
+dynamic_batching {
+  max_queue_delay_microseconds: 10000
+  preferred_batch_size: [ 4, 8, 16 ]
+}
