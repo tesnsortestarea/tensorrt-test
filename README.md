@@ -142,7 +142,7 @@ You'll also need to create two config.pbtxt files for both the text and vision e
     └── config.pbtxt
 ```
 
-# 2. Ensemble Vision and Text Engines into a VLM Model
+## 2. Ensemble Vision and Text Engines into a VLM Model
 With both vision and text engines, and their respective .pbtxt configuration files in place, we can construct an ensemble to handle both text and vision as input, ultimately providing text output to be forwarded to a database for finding the best match.
 
 ```bash
@@ -151,11 +151,121 @@ With both vision and text engines, and their respective .pbtxt configuration fil
     └── config.pbtxt
 ```
 
-# 3. Mocking Mongo-DB and Vector-DB
+## 3. Mocking Mongo-DB and Vector-DB
 After the VLM inference, we will query a database to find the best match to send an answer to the client.
 
 ```bash
 /prepare-triton-server/database/
 ├── mock-mongo.py
 └── mock-vector.py
+```
+
+# Receiveing Request from clinet over Http and return result from DB
+
+Step-by-Step Workflow:
+
+### 1- Client Initiates Request:
+
+A client application (e.g., a web application, mobile app, or another backend service) needs an AI inference.
+
+It sends a request to your Triton Client application (your custom application code). This request might contain input data (e.g., an image, text) perhaps a unique request_id.
+
+### 2- Triton Client Sends Inference Request:
+
+Your Triton Client application acts as an intermediary. It receives the client's request, pre-processes the input data (if necessary, e.g., resizing images, tokenizing text), and formats it into the appropriate tensor format for Triton.
+
+Crucially, the Triton client should generate or receive a unique request_id that it associates with this specific inference. This request_id will be passed through to the database and will be used by the client later to retrieve its result.
+
+### 3- Triton Inference Server Processes Request:
+
+The Triton Inference Server receives the inference request, which contains the input data and potentially metadata like the request_id.
+
+It loads and executes the specified TensorRT model (or other framework models).
+
+The model performs the inference and generates an output (e.g., class probabilities, bounding box coordinates, generated text).
+
+### 4- Triton Output to Database Binder Service:
+
+After the Triton Inference Server produces its output, this output does not go directly back to the original client immediately.
+
+Instead, your Triton Client application (which initiated the request) receives the inference result from Triton.
+
+This is where the "binding" happens: Your Triton Client application takes the received output, along with the original request_id and any relevant input metadata, and sends it to a Database Binder Service.
+
+### 5- Implementation Options for Database Binder:
+
+Direct Database Write (Simpler, lower throughput): The Triton Client application itself connects directly to the database and inserts the inference result. This is suitable for moderate loads.
+
+Message Queue (Recommended for high throughput and decoupling): The Triton Client publishes the inference result (along with request_id and metadata) to a message queue (e.g., Kafka, RabbitMQ, Redis Streams). A separate, dedicated Database Ingestor/Binder Service then subscribes to this queue, consumes the messages, and writes them to the database. This provides:
+
+
+# Client Retrieves Results
+
+Since the original client did not get an immediate response, it needs a mechanism to retrieve the result from the database.
+
+**Polling**: The client can periodically poll a Database Query Service/API using its request_id until the result is available in the database.
+
+**Webhooks/Push Notifications:** For more real-time scenarios, the Database Binder Service (or a separate post-processing service) could trigger a webhook or send a push notification (e.g., via WebSockets, server-sent events, mobile push notifications) back to the client once the result is written and ready.
+
+**Long Polling:** A hybrid approach where the client makes a request and the server holds the connection open until the result is ready or a timeout occurs.
+
+## Database Query Service/API:
+
+This is a dedicated service (e.g., a simple REST API built with Flask, FastAPI, Node.js, Go) that exposes an endpoint like /results/{request_id}.
+
+When the client queries this endpoint, the service fetches the corresponding record from the database using the request_id and returns the infere
+
+
+```bash
++----------------+       +-------------------+       +---------------------+       +-----------------+
+|                |       |                   |       |                     |       |                 |
+|  Client        |----->|  Triton Client    |----->|  Triton Inference   |----->|  Database Binder|
+| (Web App, Mobile,|     |  (Your Application|       |  Server             |       |  Service        |
+|  IoT Device, etc.)|     |  Code)            |       |  (TensorRT Model)   |       |  (Python, Go, etc.)|
+|                |       |                   |       |                     |       |                 |
++----------------+       +-------------------+       ---------------------+       +-----------------+
+                                      |                                   |                 |
+                                      |                                   |                 |
+                                      V                                   V                 V
+                                      +-----------------------------------------------------+
+                                      |                                                     |
+                                      |             (Optional) Message Queue (e.g., Kafka)  |
+                                      |             (For high throughput/decoupling)        |
+                                      |                                                     |
+                                      +-----------------------------------------------------+
+                                                                |
+                                                                |
+                                                                V
+                                                        +-----------------+
+                                                        |                 |
+                                                        |  Mock Vector    |
+                                                        |   Looking for   |
+                                                        | nearest neighbor|                                               |
+                                                        |                 |
+                                                        |                 |
+                                                        |                 |
+                                                        +-----------------+
+                                                                |
+                                                                |
+                                                                |
+                                                                V
+                                                        +-----------------+
+                                                        |                 |
+                                                        |  Mock MongoDB   |
+                                                        | Retrieve the    |
+                                                        |   best match    |
+                                                        |                 |
+                                                        |                 |
+                                                        +-----------------+
+                                                                |
+                                                                |
+                                                                |
+                                                                V
+                                                        +-----------------+
+                                                        |                 |
+                                                        |  Forward Result |
+                                                        |  To Client      |
+                                                        |                 |
+                                                        |                 |
+                                                        +-----------------+
 ```
