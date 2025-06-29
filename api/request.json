@@ -1,0 +1,11 @@
+{
+    "request_id": "optional_client_provided_uuid_or_unique_id",
+    "modality": "text" | "image",
+    "input_data": {
+        "text": "A query about comfortable office chairs.",  
+        "image": "data:image/jpeg;base64,...",
+      
+    },
+    "task": "embedding" | "generation"
+
+  }

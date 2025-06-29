@@ -3,7 +3,7 @@
 from database.mock-mongo import *
 from database.mock-vector import *
 
-import tritonclient.grpc as grpcclient
+import tritonclient.http as httpclient
 import numpy as np
 import json
 import time
@@ -138,7 +138,7 @@ def callback(result, error, request_context):
 
 
 # Inference Thread Function
-def inference_worker(triton_client: grpcclient.InferenceServerClient, request_queue: queue.Queue):
+def inference_worker(triton_client: http.InferenceServerClient, request_queue: queue.Queue):
     """
     Worker function for sending inference requests to Triton.
     """
@@ -147,9 +147,9 @@ def inference_worker(triton_client: grpcclient.InferenceServerClient, request_qu
         if request_data is None:  # Sentinel value to stop thread
             break
 
-        query_text = request_data["query_text"]
+        query_text = request_data["input_data"]["text"]
         # The original request ID from the client
-        client_request_id = request_data["client_request_id"]
+        client_request_id = request_data["request_id"]
 
         try:
             # Getting input for llm model
@@ -158,7 +158,7 @@ def inference_worker(triton_client: grpcclient.InferenceServerClient, request_qu
             triton_inputs = []
             for input_name, input_data in preprocessed_inputs.items():
                 if input_data is not None:
-                    triton_inputs.append(grpcclient.InferInput(
+                    triton_inputs.append(http.InferInput(
                         input_name, input_data.shape, "INT32"))
                     triton_inputs[-1].set_data_from_numpy(input_data)
 
@@ -213,7 +213,6 @@ def post_processing_worker(k: int = 5):
                     raise ValueError(
                         f"Triton returned None for output '{LLM_OUTPUT_EMBEDDING_NAME}'")
 
-                # Ensure embedding is 1D and normalized
                 if embedding.shape[0] != 1 or embedding.shape[-1] != EMBEDDING_DIM:
                     raise ValueError(
                         f"Unexpected embedding shape: {embedding.shape}")
@@ -229,9 +228,9 @@ def post_processing_worker(k: int = 5):
                     mongo_product_details = mongo_db.find_product_by_id(
                         product_id)
                     if mongo_product_details:
-                        # Clean up binary data for printing if it exists
+
                         if "image" in mongo_product_details and isinstance(mongo_product_details["image"], bytes):
-                            mongo_product_details["image"] = "bytes_data_omitted_for_print"
+                            mongo_product_details["image"] = "bytes_data"
                         detailed_results.append({
                             "product_id": product_id,
                             "similarity_distance": float(similarity_distance),

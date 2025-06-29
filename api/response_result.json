@@ -26,11 +26,5 @@
 				}
 			}
 		]
-		// For "embedding"
-		 "embedding": [0.1, 0.2, ..., 0.9]
-
-
-		// For "generation"
-		 "generated_text": "Once upon a time, in a land far away..."
 	}
 }

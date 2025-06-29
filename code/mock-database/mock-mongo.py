@@ -6,7 +6,7 @@ from tokenize import String
 from typing import Dict, List, Optional, Any
 
 
-def GeneratgeSampleData(db):
+def GeneratgeSampleData(db: MockMongoDB):
 
     categories = ["Electronics", "Books", "Home Goods", "Apparel", "Sports"]
     adjectives = ["Stylish", "Durable", "Innovative",
@@ -18,7 +18,8 @@ def GeneratgeSampleData(db):
         product_name = f"{random.choice(adjectives)} {random.choice(nouns)} {i}"
         product_description = f"A fantastic {product_category.lower()} item designed for {random.choice(['everyday use', 'professionals', 'outdoor adventures', 'relaxation'])}. It offers great value and {random.choice(['cutting-edge features', 'timeless design', 'superior comfort'])}."
         product_price = round(random.uniform(15.00, 1000.00), 2)
-        product_quantity = random.randint(0, 200)
+        created_at = datetime.today().strftime('%Y-%m-%d')
+        id = "same as in vector"
 
         # Generate some dummy image data (e.g., 50 bytes of random data)
         dummy_image_data = os.urandom(50)
@@ -26,21 +27,21 @@ def GeneratgeSampleData(db):
         product_metadata = {
             "category": product_category,
             "price": product_price,
-            "quantity_available": product_quantity,
             "tags": random.sample(["new arrival", "sale", "bestseller", "eco-friendly", "limited edition"], k=random.randint(1, 3))
+            "created_at": created_at,
+            "_id": "from vector",
+            "name": product_name
+
         }
 
         product_id = db.insert_product(
             product_data=product_metadata,
-            name=product_name,
-            descript=product_description,
-            image_data=dummy_image_data if random.random(
+            image=dummy_image_data if random.random(
             ) > 0.3 else None  # 70% chance of having an image
         )
 
 
 class MockMongoDB:
-    """Simple mock MongoDB implementation for storing product data"""
 
     def __init__(self, db_path: str = "./mock_db"):
         """Initialize the mock database with a storage path"""
@@ -73,7 +74,7 @@ class MockMongoDB:
         Insert a product with metadata and optional image
 
             product_data: Product metadata (name, category, price, etc.)
-            image_data: Binary image data (optional)
+            image: Binary image data (optional)
 
         Returns:
             Product ID
@@ -126,7 +127,12 @@ class MockMongoDB:
 
     def find_by_category(self, category: str) -> List[Dict]:
         """Find products by category"""
-        return list(self.products.values())
+        results = []
+        for product in self.products.values():
+            price = product.get("category", 0)
+            if min_price <= price <= max_price:
+                results.append(product)
+        return results
 
     def find_by_price_range(self, min_price: float, max_price: float) -> List[Dict]:
         """Find products within a price range"""

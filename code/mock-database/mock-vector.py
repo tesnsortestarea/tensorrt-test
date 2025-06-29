@@ -17,18 +17,11 @@ def GenerateSampleData() -> List:
         product_id = f"product_{i:03d}"
         text_embedding = np.random.rand(EMBEDDING_DIM).astype(np.float32)
         visual_embedding = np.random.rand(EMBEDDING_DIM).astype(np.float32)
-        metadata = {
-            "name": f"Product Name {i}",
-            "category": np.random.choice(["Electronics", "Apparel", "Home Goods", "Books", "Toys"]),
-            "price": round(np.random.uniform(10.0, 500.0), 2),
-            "description": f"A high-quality item from the category of {np.random.choice(['gadgets', 'clothing', 'furniture', 'literature', 'games'])}."
-        }
 
         product = ProductEmbedding(
             product_id=product_id,
             text_embedding=text_embedding,
             visual_embedding=visual_embedding,
-            metadata=metadata
         )
         db.add_product(product)
         sample_products_data.append(product)
@@ -40,18 +33,15 @@ class ProductEmbedding:
     """Class to represent a product with both textual and visual embeddings."""
 
     def __init__(self, product_id: str, text_embedding: np.ndarray,
-                 visual_embedding: Optional[np.ndarray] = None,
-                 metadata: Optional[Dict] = None):
+                 visual_embedding: Optional[np.ndarray] = None):
         """
             product_id: Unique identifier for the product
             text_embedding: Text embedding vector for the product
             visual_embedding: Visual embedding vector for the product
-            metadata: Additional product information
         """
         self.product_id = product_id
         self.text_embedding = text_embedding
         self.visual_embedding = visual_embedding
-        self.metadata = metadata or {}
 
     def get_combined_embedding(self, text_weight: float = 0.5) -> np.ndarray:
         """
@@ -135,7 +125,7 @@ class FAISSVectorDB:
             k: Number of nearest neighbors to return
 
         Returns:
-            List of tuples (product_id, distance, metadata)
+            List of tuples (product_id, distance)
         """
         # Ensure query vector has correct shape and type
         query_vector = np.array([query_vector]).astype(np.float32)
@@ -149,7 +139,7 @@ class FAISSVectorDB:
             if idx != -1 and idx in self.products:  # -1 means no result found
                 product = self.products[idx]
                 results.append(
-                    (product.product_id, distances[0][i], product.metadata))
+                    (product.product_id, distances[0][i]))
 
         return results
 
