@@ -156,8 +156,8 @@ After the VLM inference, we will query a database to find the best match to send
 
 ```bash
 /prepare-triton-server/database/
-├── mock-mongo.py
-└── mock-vector.py
+├── code/mock-database/mock-mongo.py
+└── code/mock-database/mock-vector.py
 ```
 
 # Cline send request to triton-server and receive result
@@ -218,15 +218,127 @@ This is a dedicated service (e.g., a simple REST API built with Flask, FastAPI, 
 When the client queries this endpoint, the service fetches the corresponding record from the database using the request_id and returns the infere
 
 ![plot](files/database.png)
+re.
 
 
+# Adding load balancer together with container to handle more request in parallel
+To scale inference throughput and handle a higher volume of parallel requests, a load balancing solution is essential for NVIDIA Triton Inference Server. This project addresses this by deploying multiple Triton instances within Docker containers, fronted by an Nginx server. The container configurations, defined in YAML, will enable precise allocation of distinct GPUs to each Triton instance, maximizing parallel processing 
+
+```bash
+version: '3.8'
+services:
+  triton-server-1:
+    image: nvcr.io/nvidia/tritonserver:24.05-py3 # Use a recent version
+    container_name: triton-server-1
+    # Use --gpus all if you want this instance to use all GPUs,
+    # or specify devices: ['device=0'] for a specific GPU
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1 # Assign 1 GPU to this container
+              capabilities: [gpu]
+    environment:
+      # Optional: limit visible devices if using multiple GPUs per host
+      # CUDA_VISIBLE_DEVICES: "0"
+    volumes:
+      - ./model_repository:/models # Mount your models
+    command: ["tritonserver", "--model-repository=/models", "--log-verbose=1"]
+    ports:
+      - "8000" # Expose HTTP port for internal LB access
+      - "8001" # Expose gRPC port for internal LB access
+      - "8002" # Expose Metrics port for internal LB access
+    networks:
+      - triton_net
+
+  triton-server-2:
+    image: nvcr.io/nvidia/tritonserver:24.05-py3
+    container_name: triton-server-2
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1 # Assign another GPU to this container
+              capabilities: [gpu]
+    environment:
+      # CUDA_VISIBLE_DEVICES: "1" # If multiple GPUs available and you assign different GPUs
+    volumes:
+      - ./model_repository:/models
+    command: ["tritonserver", "--model-repository=/models", "--log-verbose=1"]
+    ports:
+      - "8000"
+      - "8001"
+      - "8002"
+    networks:
+      - triton_net
+
+  # Nginx as an HTTP Load Balancer
+  nginx-lb:
+    image: nginx:latest
+    container_name: nginx-lb
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro # Mount Nginx configuration
+    ports:
+      - "80:80" # Expose Nginx on host port 80
+      - "443:443" # Optional: For HTTPS
+    depends_on:
+      - triton-server-1
+      - triton-server-2
+    networks:
+      - triton_net
+
+networks:
+  triton_net:
+    driver: bridge
+```
+
+### We use this script to configure Ngix serve to handle request forwarding to different server.
 
 
+```bash
+worker_processes 1;
 
+events {
+    worker_connections 1024;
+}
 
+http {
+    upstream triton_backend {
+        server triton-server-1:8000; # Use service name as hostname
+        server triton-server-2:8000;
+    }
 
+    server {
+        listen 80;
+        server_name localhost;
 
+        location / {
+            proxy_pass http://triton_backend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
 
+            # Triton specific headers for large requests/responses
+            client_max_body_size 0; # Allow unlimited request body size
+            proxy_buffering off; # Disable buffering for streaming
+
+            # Increase timeouts for potentially long inference requests
+            proxy_read_timeout 300s;
+            proxy_connect_timeout 300s;
+            proxy_send_timeout 300s;
+        }
+
+        # Optional: Health check endpoint for the load balancer itself (not Triton)
+        location /health {
+            return 200 'healthy';
+            add_header Content-Type text/plain;
+        }
+    }
+}
+```
 
 
 
