@@ -5,6 +5,36 @@ from typing import Dict, List, Tuple, Union, Optional
 import os
 import pickle
 
+# Define the embedding dimension
+EMBEDDING_DIM = 128
+
+
+def GenerateSampleData() -> List:
+
+    # Generate and add 10 sample products
+    sample_products_data = []
+    for i in range(1, 11):
+        product_id = f"product_{i:03d}"
+        text_embedding = np.random.rand(EMBEDDING_DIM).astype(np.float32)
+        visual_embedding = np.random.rand(EMBEDDING_DIM).astype(np.float32)
+        metadata = {
+            "name": f"Product Name {i}",
+            "category": np.random.choice(["Electronics", "Apparel", "Home Goods", "Books", "Toys"]),
+            "price": round(np.random.uniform(10.0, 500.0), 2),
+            "description": f"A high-quality item from the category of {np.random.choice(['gadgets', 'clothing', 'furniture', 'literature', 'games'])}."
+        }
+
+        product = ProductEmbedding(
+            product_id=product_id,
+            text_embedding=text_embedding,
+            visual_embedding=visual_embedding,
+            metadata=metadata
+        )
+        db.add_product(product)
+        sample_products_data.append(product)
+
+    return sample_products_data
+
 
 class ProductEmbedding:
     """Class to represent a product with both textual and visual embeddings."""

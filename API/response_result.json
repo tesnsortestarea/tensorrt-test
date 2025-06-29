@@ -1,0 +1,36 @@
+{
+	"request_id": "generated_or_provided_uuid",
+	"status": "completed",
+	"timestamp": "2025-06-29T10:30:00Z",
+	"results": {
+		"type": "semantic_search_results",
+		"matches": [
+			{
+				"product_id": "123",
+				"similarity_distance": 0.15,
+				"details": {
+					"_id": "123",
+					"name": "Stylish Blue Denim Jacket",
+					"description": "A versatile and stylish denim jacket...",
+					"category": "Apparel",
+					"price": 59.99,
+					"created_at": { "$date": "2025-06-29T08:00:00Z" }
+					// ... other product fields, including image_base64 if applicable
+				}
+			},
+			{
+				"product_id": "456",
+				"similarity_distance": 0.2,
+				"details": {
+					/* ... */
+				}
+			}
+		]
+		// For "embedding"
+		 "embedding": [0.1, 0.2, ..., 0.9]
+
+
+		// For "generation"
+		 "generated_text": "Once upon a time, in a land far away..."
+	}
+}

@@ -160,9 +160,11 @@ After the VLM inference, we will query a database to find the best match to send
 └── mock-vector.py
 ```
 
-# Receiveing Request from clinet over Http and return result from DB
+# Cline send request to triton-server and receive result
 
-Step-by-Step Workflow:
+**Step-by-Step Workflow:**
+
+You can use this tutorial page for getting more familiar with triton client. https://github.com/triton-inference-server/client/tree/main
 
 ### 1- Client Initiates Request:
 
@@ -199,7 +201,7 @@ Direct Database Write (Simpler, lower throughput): The Triton Client application
 Message Queue (Recommended for high throughput and decoupling): The Triton Client publishes the inference result (along with request_id and metadata) to a message queue (e.g., Kafka, RabbitMQ, Redis Streams). A separate, dedicated Database Ingestor/Binder Service then subscribes to this queue, consumes the messages, and writes them to the database. This provides:
 
 
-# Client Retrieves Results
+### 6- Client Retrieves Results
 
 Since the original client did not get an immediate response, it needs a mechanism to retrieve the result from the database.
 
@@ -209,63 +211,25 @@ Since the original client did not get an immediate response, it needs a mechanis
 
 **Long Polling:** A hybrid approach where the client makes a request and the server holds the connection open until the result is ready or a timeout occurs.
 
-## Database Query Service/API:
+### 7- Database Query Service/API:
 
 This is a dedicated service (e.g., a simple REST API built with Flask, FastAPI, Node.js, Go) that exposes an endpoint like /results/{request_id}.
 
 When the client queries this endpoint, the service fetches the corresponding record from the database using the request_id and returns the infere
 
+![plot](files/database.png)
 
-```bash
-+----------------+       +-------------------+       +---------------------+       +-----------------+
-|                |       |                   |       |                     |       |                 |
-|  Client        |----->|  Triton Client    |----->|  Triton Inference   |----->|  Database Binder|
-| (Web App, Mobile,|     |  (Your Application|       |  Server             |       |  Service        |
-|  IoT Device, etc.)|     |  Code)            |       |  (TensorRT Model)   |       |  (Python, Go, etc.)|
-|                |       |                   |       |                     |       |                 |
-+----------------+       +-------------------+       ---------------------+       +-----------------+
-                                      |                                   |                 |
-                                      |                                   |                 |
-                                      V                                   V                 V
-                                      +-----------------------------------------------------+
-                                      |                                                     |
-                                      |             (Optional) Message Queue (e.g., Kafka)  |
-                                      |             (For high throughput/decoupling)        |
-                                      |                                                     |
-                                      +-----------------------------------------------------+
-                                                                |
-                                                                |
-                                                                V
-                                                        +-----------------+
-                                                        |                 |
-                                                        |  Mock Vector    |
-                                                        |   Looking for   |
-                                                        | nearest neighbor|                                               |
-                                                        |                 |
-                                                        |                 |
-                                                        |                 |
-                                                        +-----------------+
-                                                                |
-                                                                |
-                                                                |
-                                                                V
-                                                        +-----------------+
-                                                        |                 |
-                                                        |  Mock MongoDB   |
-                                                        | Retrieve the    |
-                                                        |   best match    |
-                                                        |                 |
-                                                        |                 |
-                                                        +-----------------+
-                                                                |
-                                                                |
-                                                                |
-                                                                V
-                                                        +-----------------+
-                                                        |                 |
-                                                        |  Forward Result |
-                                                        |  To Client      |
-                                                        |                 |
-                                                        |                 |
-                                                        +-----------------+
-```
+
+
+
+
+
+
+
+
+
+
+
+
+
+

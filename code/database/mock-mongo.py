@@ -6,6 +6,39 @@ from tokenize import String
 from typing import Dict, List, Optional, Any
 
 
+def GeneratgeSampleData(db):
+
+    categories = ["Electronics", "Books", "Home Goods", "Apparel", "Sports"]
+    adjectives = ["Stylish", "Durable", "Innovative",
+                  "Comfortable", "High-Performance"]
+    nouns = ["Gadget", "Novel", "Decor", "Outfit", "Equipment"]
+
+    for i in range(1, 11):
+        product_category = random.choice(categories)
+        product_name = f"{random.choice(adjectives)} {random.choice(nouns)} {i}"
+        product_description = f"A fantastic {product_category.lower()} item designed for {random.choice(['everyday use', 'professionals', 'outdoor adventures', 'relaxation'])}. It offers great value and {random.choice(['cutting-edge features', 'timeless design', 'superior comfort'])}."
+        product_price = round(random.uniform(15.00, 1000.00), 2)
+        product_quantity = random.randint(0, 200)
+
+        # Generate some dummy image data (e.g., 50 bytes of random data)
+        dummy_image_data = os.urandom(50)
+
+        product_metadata = {
+            "category": product_category,
+            "price": product_price,
+            "quantity_available": product_quantity,
+            "tags": random.sample(["new arrival", "sale", "bestseller", "eco-friendly", "limited edition"], k=random.randint(1, 3))
+        }
+
+        product_id = db.insert_product(
+            product_data=product_metadata,
+            name=product_name,
+            descript=product_description,
+            image_data=dummy_image_data if random.random(
+            ) > 0.3 else None  # 70% chance of having an image
+        )
+
+
 class MockMongoDB:
     """Simple mock MongoDB implementation for storing product data"""
 

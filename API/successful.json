@@ -1,0 +1,6 @@
+{
+	"status": "accepted",
+	"request_id": "generated_or_provided_uuid",
+	"message": "Inference request received and is being processed.",
+	"result_url": "/v1/inference/generated_or_provided_uuid"
+}
